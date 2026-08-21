@@ -147,7 +147,7 @@ int main() {
     // modify
     node.GetAsObject("app").GetAsObject("debug").GetAsBool() = true;
     node.GetAsObject("app").GetAsObject("ports").GetArrayNodeRef().push_back(
-        ordinaryjson::OrdinaryJsonNode(9090));
+            ordinaryjson::OrdinaryJsonNode(9090));
 
     // serialize
     std::cout << node.Stringify() << "\n";
