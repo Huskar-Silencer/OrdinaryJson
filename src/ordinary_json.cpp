@@ -16,6 +16,15 @@ namespace ordinaryjson {
 
     constexpr size_t kMaxParseDepth = 100;
 
+    constexpr char kObjectStart = '{';
+    constexpr char kObjectEnd = '}';
+    constexpr char kArrayStart = '[';
+    constexpr char kArrayEnd = ']';
+    constexpr char kStringStart = '"';
+    constexpr char kStringEnd = '"';
+    constexpr char kSeparator = ',';
+    constexpr char kKeyValueSep = ':';
+
     namespace internal {
         class CursorSlice {
         public:
@@ -151,7 +160,7 @@ namespace ordinaryjson {
      * @param out: The output string.
      * @param cp: The Unicode code point.
      */
-    static void AppendUtf8(internal::JsonStringType &out, uint32_t cp) {
+    static void AppendUtf8(internal::JsonStringType &out, const uint32_t cp) {
         if (cp <= 0x7F) {
             out.push_back(static_cast<char>(cp));
         } else if (cp <= 0x7FF) {
@@ -261,19 +270,19 @@ namespace ordinaryjson {
         if (cs.End()) ParseReject("Unexpected end of input", cs.Index());
         const char c = cs.CurrentChar();
         switch (c) {
-            case '{': {
+            case kObjectStart: {
                 JsonObjectType result;
                 ParseObject(cs, result, depth + 1);
                 SkipWhiteSpace(cs);
                 return OrdinaryJsonNode(std::move(result));
             }
-            case '[': {
+            case kArrayStart: {
                 JsonArrayType result;
                 ParseArray(cs, result, depth + 1);
                 SkipWhiteSpace(cs);
                 return OrdinaryJsonNode(std::move(result));
             }
-            case '"': {
+            case kStringStart: {
                 JsonStringType result;
                 ParseString(cs, result);
                 SkipWhiteSpace(cs);
@@ -281,7 +290,7 @@ namespace ordinaryjson {
             }
             case 't':
             case 'f': {
-                bool result = ParseBoolValue(cs);
+                const bool result = ParseBoolValue(cs);
                 SkipWhiteSpace(cs);
                 return OrdinaryJsonNode(result);
             }
@@ -310,6 +319,7 @@ namespace ordinaryjson {
      *
      * @param cs A CursorSlice object which represents input JSON string.
      * @param result A JsonObjectType object which stores the parsed object.
+     * @param depth
      *
      * @throw ParseError if input string is invalid.
      *
@@ -332,7 +342,7 @@ namespace ordinaryjson {
         cs.MoveNext(); // consume '{'
         SkipWhiteSpace(cs);
         if (cs.End()) ParseReject("Unexpected end of input", cs.Index());
-        if (cs.CurrentChar() == '}') {
+        if (cs.CurrentChar() == kObjectEnd) {
             cs.MoveNext();
             return;
         }
@@ -340,19 +350,20 @@ namespace ordinaryjson {
             JsonStringType key;
             ParseString(cs, key);
             SkipWhiteSpace(cs);
-            if (cs.End() || cs.CurrentChar() != ':')
-                ParseReject(':', cs.End() ? '\0' : cs.CurrentChar(), cs.Index());
+            if (cs.End() || cs.CurrentChar() != kKeyValueSep)
+                ParseReject(kKeyValueSep, cs.End() ? '\0' : cs.CurrentChar(),
+                            cs.Index());
             cs.MoveNext();
             result.emplace(std::move(key), ParseValue(cs, depth));
             if (cs.End()) ParseReject("Unexpected end of input", cs.Index());
             const char c = cs.CurrentChar();
-            if (c == ',') {
+            if (c == kSeparator) {
                 cs.MoveNext();
                 SkipWhiteSpace(cs);
                 if (cs.End()) ParseReject("Unexpected end of input", cs.Index());
                 continue;
             }
-            if (c == '}') {
+            if (c == kObjectEnd) {
                 cs.MoveNext();
                 return;
             }
@@ -365,6 +376,7 @@ namespace ordinaryjson {
      *
      * @param cs A CursorSlice object which represents input JSON string.
      * @param result A JsonArrayType object which stores the parsed array.
+     * @param depth
      *
      * This function parses a JSON array using a context-free grammar.
      * The grammar is as follows:
@@ -377,13 +389,13 @@ namespace ordinaryjson {
      */
     void internal::OrdinaryParser::ParseArray(CursorSlice &cs,
                                               JsonArrayType &result,
-                                              size_t depth) {
+                                              const size_t depth) {
         if (depth > kMaxParseDepth)
             ParseReject("Maximum nesting depth exceeded", cs.Index());
         cs.MoveNext(); // consume '['
         SkipWhiteSpace(cs);
         if (cs.End()) ParseReject("Unexpected end of input", cs.Index());
-        if (cs.CurrentChar() == ']') {
+        if (cs.CurrentChar() == kArrayEnd) {
             cs.MoveNext();
             return;
         }
@@ -391,13 +403,13 @@ namespace ordinaryjson {
             result.emplace_back(ParseValue(cs, depth));
             if (cs.End()) ParseReject("Unexpected end of input", cs.Index());
             const char c = cs.CurrentChar();
-            if (c == ',') {
+            if (c == kSeparator) {
                 cs.MoveNext();
                 SkipWhiteSpace(cs);
                 if (cs.End()) ParseReject("Unexpected end of input", cs.Index());
                 continue;
             }
-            if (c == ']') {
+            if (c == kArrayEnd) {
                 cs.MoveNext();
                 return;
             }
@@ -429,12 +441,13 @@ namespace ordinaryjson {
 
     void internal::OrdinaryParser::ParseString(CursorSlice &cs,
                                                JsonStringType &result) {
-        if (cs.End() || cs.CurrentChar() != '"')
-            ParseReject('"', cs.End() ? '\0' : cs.CurrentChar(), cs.Index());
+        if (cs.End() || cs.CurrentChar() != kStringStart)
+            ParseReject(kStringStart, cs.End() ? '\0' : cs.CurrentChar(),
+                        cs.Index());
         cs.MoveNext(); // consume opening quote
         while (cs.NotEnd()) {
             const char c = cs.CurrentChar();
-            if (c == '"') {
+            if (c == kStringEnd) {
                 cs.MoveNext(); // consume closing quote
                 return;
             }
@@ -514,7 +527,6 @@ namespace ordinaryjson {
      * @throw ParseError if the input string is invalid or if conversion
      * from string to number fails due to invalid argument or out of range.
      */
-
     void internal::OrdinaryParser::ParseNumberValue(CursorSlice &cs,
                                                     NumberResultPack &result) {
         auto parse_status = ParseJsonNumberStatus::kInitialStatus;
@@ -637,11 +649,10 @@ namespace ordinaryjson {
         // convert string to number
         try {
             result.is_integer_ = is_integer;
-            if (result.is_integer_) {
+            if (result.is_integer_)
                 result.integer_data_ = std::stoll(number_str_cache);
-            } else {
+            else
                 result.double_data_ = std::stod(number_str_cache);
-            }
         } catch (const std::exception &e) {
             ParseReject(std::string("invalid number: ") + e.what(), cs.Index());
         }
@@ -696,10 +707,10 @@ namespace ordinaryjson {
      */
     static void AppendJsonString(const std::string &s, std::ostream &out) {
         static constexpr char kHexDigits[] = "0123456789abcdef";
-        out << '"';
+        out << kStringStart;
         for (const char c: s) {
             switch (c) {
-                case '"': out << "\\\"";
+                case kStringStart: out << "\\\"";
                     break;
                 case '\\': out << "\\\\";
                     break;
@@ -724,7 +735,7 @@ namespace ordinaryjson {
                     break;
             }
         }
-        out << '"';
+        out << kStringEnd;
     }
 
     /**
@@ -735,27 +746,27 @@ namespace ordinaryjson {
     void OrdinaryJsonNode::StringifyTo(std::ostream &os) const {
         switch (value_type_) {
             case NodeValueTypeEnum::kObject: {
-                os << '{';
+                os << kObjectStart;
                 bool first = true;
                 for (const auto &kv: *object_data_) {
-                    if (!first) os << ',';
+                    if (!first) os << kSeparator;
                     first = false;
                     AppendJsonString(kv.first, os);
-                    os << ':';
+                    os << kKeyValueSep;
                     kv.second.StringifyTo(os);
                 }
-                os << '}';
+                os << kObjectEnd;
                 break;
             }
             case NodeValueTypeEnum::kArray: {
-                os << '[';
+                os << kArrayStart;
                 bool first = true;
                 for (const auto &elem: *array_data_) {
-                    if (!first) os << ',';
+                    if (!first) os << kSeparator;
                     first = false;
                     elem.StringifyTo(os);
                 }
-                os << ']';
+                os << kArrayEnd;
                 break;
             }
             case NodeValueTypeEnum::kString:
@@ -827,29 +838,29 @@ namespace ordinaryjson {
         return "unknown";
     }
 
-    void internal::OrdinaryParser::ParseReject(char expect, char actual,
-                                               size_t pos) {
+    void internal::OrdinaryParser::ParseReject(const char expect, const char actual,
+                                               const size_t pos) {
         std::ostringstream oss;
         oss << "unexpected character '" << actual << "' (expected '" << expect
                 << "')";
         ParseReject(oss.str(), pos);
     }
 
-    void internal::OrdinaryParser::ParseReject(char actual, size_t pos) {
+    void internal::OrdinaryParser::ParseReject(const char actual, const size_t pos) {
         std::ostringstream oss;
         oss << "unexpected character '" << actual << "'";
         ParseReject(oss.str(), pos);
     }
 
     void internal::OrdinaryParser::ParseReject(const std::string &error_msg,
-                                               char actual, size_t pos) {
+                                               const char actual, const size_t pos) {
         std::ostringstream oss;
         oss << error_msg << " (got '" << actual << "')";
         ParseReject(oss.str(), pos);
     }
 
     void internal::OrdinaryParser::ParseReject(const std::string &error_msg,
-                                               size_t pos) {
+                                               const size_t pos) {
         std::ostringstream oss;
         oss << "parse error at byte " << pos << ": " << error_msg;
         throw ParseError(oss.str(), pos);
@@ -880,8 +891,8 @@ namespace ordinaryjson {
         internal::CursorSlice cs(value);
         OrdinaryJsonNode result = internal::OrdinaryParser::ParseValue(cs);
         if (cs.NotEnd()) {
-            internal::OrdinaryParser::ParseReject("Unexpected end of input",
-                                                  cs.Index());
+            internal::OrdinaryParser::ParseReject(
+                "Unexpected trailing data after the value", cs.Index());
         }
         return result;
     }

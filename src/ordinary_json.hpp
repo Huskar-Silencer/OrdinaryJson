@@ -53,7 +53,6 @@ class OrdinaryJsonNode {
   using JsonArrayType = std::vector<OrdinaryJsonNode>;
   using JsonStringType = std::string;
 
- private:
   enum class NodeValueTypeEnum {
     kObject,
     kArray,
@@ -322,6 +321,12 @@ class OrdinaryJsonNode {
     Reset();
     value_type_ = NodeValueTypeEnum::kBool;
     boolean_data_ = value;
+  }
+
+  void Reset(void* value) {
+    Reset();
+    value_type_ = NodeValueTypeEnum::kNull;
+    null_data_ = value;
   }
 
   JsonObjectType& GetObjectNodeRef() {

@@ -12,20 +12,91 @@ The library consists of two files:
 - `src/ordinary_json.hpp` — the header
 - `src/ordinary_json.cpp` — the implementation
 
-Add both to your build and point the include path at `src/`:
-
-```bash
-# MSVC
-cl /EHsc /std:c++14 /I src your_program.cpp src/ordinary_json.cpp
-
-# GCC / Clang
-g++ -std=c++14 -I src your_program.cpp src/ordinary_json.cpp -o your_program
-```
+Copy both into your project, add their directory to the include path, and
+compile `ordinary_json.cpp` together with your sources. There are no external
+dependencies beyond the C++ standard library (C++14 or later).
 
 ```c++
 #include "ordinary_json.hpp"
 
 // Everything lives in the `ordinaryjson` namespace.
+```
+
+### Compiling from the command line
+
+```bash
+# MSVC (from a Developer Command Prompt)
+cl /nologo /EHsc /std:c++14 /W4 /O2 /I src your_program.cpp src/ordinary_json.cpp
+your_program.exe
+
+# GCC / Clang
+g++ -std=c++14 -O2 -I src your_program.cpp src/ordinary_json.cpp -o your_program
+```
+
+`/W4` (MSVC) / `-Wall -Wextra` (GCC, Clang) enable all warnings; `/O2` /
+`-O2` enable optimization.
+
+Compile and run the test suite (257 cases):
+
+```bash
+# MSVC
+cl /nologo /EHsc /std:c++14 /W4 /O2 /I src tests/test_ordinary_json.cpp src/ordinary_json.cpp
+test_ordinary_json.exe   # -> "Total: 257, Passed: 257, Failed: 0"
+
+# GCC / Clang
+g++ -std=c++14 -Wall -Wextra -O2 -I src tests/test_ordinary_json.cpp src/ordinary_json.cpp -o oj_test
+./oj_test                # -> "Total: 257, Passed: 257, Failed: 0"
+                         # (Windows PowerShell: .\oj_test)
+```
+
+Compile and run the benchmark:
+
+```bash
+# MSVC
+cl /nologo /EHsc /std:c++14 /O2 /I src benchmark/benchmark.cpp src/ordinary_json.cpp
+benchmark.exe
+
+# GCC / Clang
+g++ -std=c++14 -O2 -I src benchmark/benchmark.cpp src/ordinary_json.cpp -o oj_bench
+./oj_bench               # (Windows PowerShell: .\oj_bench)
+```
+
+### Building with CMake
+
+`CMakeLists.txt` defines two targets:
+
+- `OrdinaryJson` — the example program (`src/main.cpp`)
+- `ordinaryjson_tests` — the test suite (`tests/test_ordinary_json.cpp`),
+  registered with CTest
+
+```bash
+# MSVC (Visual Studio on Windows)
+cmake -S . -B build                          # default generator (Visual Studio on Windows)
+cmake --build build --config Release
+ctest --test-dir build -C Release --output-on-failure   # run the tests
+build\Release\OrdinaryJson.exe                            # run the example
+```
+
+```bash
+# GCC / Clang (Linux, macOS, or MinGW on Windows)
+cmake -S . -B build -G "Ninja"                          # or "Unix Makefiles" / "MinGW Makefiles"
+cmake --build build
+ctest --test-dir build --output-on-failure              # run the tests
+./build/OrdinaryJson                                    # run the example
+                                                       # (Windows PowerShell: .\build\Release\OrdinaryJson.exe)
+```
+
+> On Windows, if the default generator does not match your Visual Studio
+> version, pass `-G` explicitly, e.g. `-G "Visual Studio 18 2026" -A x64`.
+
+### Using CMake in your own project
+
+The two sources are plain C++ — just add them to your target:
+
+```cmake
+add_executable(MyApp main.cpp src/ordinary_json.cpp)
+target_include_directories(MyApp PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_compile_features(MyApp PRIVATE cxx_std_14)
 ```
 
 ## Usage
@@ -333,7 +404,7 @@ myservice
 A comprehensive test suite lives in `tests/`, with full documentation in
 [`docs/TESTING.md`](docs/TESTING.md).
 
-- **256 test cases, all passing**, covering:
+- **257 test cases, all passing**, covering:
   - basic values, integer/double boundaries (incl. `INT64_MAX`/`INT64_MIN` and overflow)
   - string escapes and Unicode (surrogate pairs)
   - objects/arrays, whitespace handling, nesting-depth limit (100)
@@ -344,10 +415,19 @@ A comprehensive test suite lives in `tests/`, with full documentation in
   - type accessors and the exception hierarchy (`ParseError` / `TypeError` / `OutOfRangeError`)
   - value semantics (copy/move/reset)
 
-Build and run (MSVC):
+Build and run:
 
 ```bash
-cl /nologo /EHsc /std:c++14 /W4 /I src tests/test_ordinary_json.cpp src/ordinary_json.cpp
+# MSVC command line
+cl /nologo /EHsc /std:c++14 /W4 /O2 /I src tests/test_ordinary_json.cpp src/ordinary_json.cpp
+test_ordinary_json.exe
+
+# GCC / Clang
+g++ -std=c++14 -Wall -Wextra -O2 -I src tests/test_ordinary_json.cpp src/ordinary_json.cpp -o oj_test
+./oj_test                # (Windows PowerShell: .\oj_test)
+
+# or via CMake + CTest (see "Building with CMake" above)
+ctest --test-dir build -C Release --output-on-failure
 ```
 
 ## Benchmark
@@ -368,8 +448,13 @@ as µs per operation).
 | realistic (50 users) | 3.5 KB | 49.1 µs | 99.1 µs |
 | 100-level nested arrays | 201 B | 11.4 µs | 5.06 µs |
 
-Build and run (MSVC, release):
+Build and run (release):
 
 ```bash
+# MSVC
 cl /nologo /O2 /EHsc /std:c++14 /I src benchmark/benchmark.cpp src/ordinary_json.cpp
+
+# GCC / Clang
+g++ -std=c++14 -O2 -I src benchmark/benchmark.cpp src/ordinary_json.cpp -o oj_bench
+./oj_bench               # (Windows PowerShell: .\oj_bench)
 ```
